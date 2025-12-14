@@ -1,12 +1,8 @@
-import { Hono } from "hono";
+import { app } from "@/server";
 import { handle } from "hono/vercel";
-import authRoute from "@/server/auth";
-
-const app = new Hono().basePath("/api/v1");
-
-const routes = app.route("/auth", authRoute);
 
 export const GET = handle(app);
 export const POST = handle(app);
-
-export type AppType = typeof routes;
+export const PUT = handle(app);
+export const PATCH = handle(app);
+export const DELETE = handle(app);
