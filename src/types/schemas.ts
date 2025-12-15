@@ -50,3 +50,7 @@ export const getChapterSchema = z.object({
 export const updateAiModelSchema = z.object({
   model: z.enum($Enums.AIModel),
 });
+
+export const schemaPayment = z.object({
+  creditsCount: z.coerce.number().min(1),
+});

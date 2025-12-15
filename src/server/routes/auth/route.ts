@@ -6,18 +6,8 @@ import { hashPassword, verifyPassword } from "@/server/utils/helper";
 import { deleteCookie, getSignedCookie, setSignedCookie } from "hono/cookie";
 import { AUTH_COOKIE, SESSION_TTL_SECONDS } from "@/server/utils/constants";
 import { addSeconds } from "date-fns";
-import { authMiddleware } from "@/server/middleware/auth.middleware";
 
 const auth = new Hono()
-  .get("/me", authMiddleware, async (c) => {
-    const user = c.get("user");
-
-    return c.json({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-    });
-  })
   .post("/login", zValidator("json", loginSchema), async (c) => {
     const { email, password } = c.req.valid("json");
 

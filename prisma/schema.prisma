@@ -25,7 +25,9 @@ model User {
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
-  
+  creditBalance CreditBalance?
+  transactions  Transaction[]
+
   aiModel  AIModel   @default(openai)
   sessions Session[]
 }
@@ -188,6 +190,41 @@ model TestQuestion {
 
   questionId String
   question   Question @relation(fields: [questionId], references: [id])
+}
+
+model CreditBalance {
+  id String @id @default(cuid())
+
+  userId  String @unique
+  balance Float  @default(0)
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+//TODO: normalize or optimize this table later
+model Transaction {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  notes            String?
+  amount           Float
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  model            AIModel?
+
+  creditBalanceId String
+  creditBalance   CreditBalance @relation(fields: [creditBalanceId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([creditBalanceId])
 }
 
 enum AIModel {
