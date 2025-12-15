@@ -1,8 +1,11 @@
 import { Hono } from "hono";
 import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
-import authRoute from "./routes/auth/route";
 import { rateLimiter } from "hono-rate-limiter";
+import authRoute from "./routes/auth/route";
+import courseRoute from "./routes/courses/route";
+import chapterRoute from "./routes/chapter/route";
+import aiRoute from "./routes/ai/route";
 
 export const app = new Hono().basePath("/api/v1");
 
@@ -22,6 +25,10 @@ app.get("/health", (c) => {
   return c.json({ status: "OK" }, 200);
 });
 
-const routes = app.route("/auth", authRoute);
+const routes = app
+  .route("/auth", authRoute)
+  .route("/courses", courseRoute)
+  .route("/chapter", chapterRoute)
+  .route("/ai", aiRoute);
 
 export type AppType = typeof routes;

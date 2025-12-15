@@ -49,7 +49,7 @@ const auth = new Hono()
       }
     );
 
-    return c.json({ success: "true", data: user });
+    return c.json({ success: "true", data: user }, 200);
   })
   .post("/register", zValidator("json", registerSchema), async (c) => {
     const { email, name, password, confirmPassword } = c.req.valid("json");
@@ -95,7 +95,7 @@ const auth = new Hono()
       }
     );
 
-    return c.json({ success: "true", data: user });
+    return c.json({ success: "true", data: user }, 201);
   })
   .post("/logout", async (c) => {
     const sessionId = await getSignedCookie(
@@ -110,7 +110,7 @@ const auth = new Hono()
 
     deleteCookie(c, AUTH_COOKIE, { path: "/" });
 
-    return c.json({ success: true });
+    return c.json({ success: true }, 200);
   });
 
 export default auth;

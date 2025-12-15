@@ -6,8 +6,10 @@
 - [x] add auth
 - [x] Define RPC router structure
 - [ ] admin and student pages
-- [ ] figure out database design
+- [x] figure out database design
+- [ ] improve overall UI
 - [ ] Setup error handling & RBAC
+- [ ] Add PDF/DOC parsing to upload courses from admin 
 - [ ] Implement CRUD for courses and student tests
 - [ ] complete endpoints for all ai based routes
 - [ ] add ai-sdk and ai chat and prompt builder (chapter-aware)

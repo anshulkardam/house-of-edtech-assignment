@@ -23,9 +23,10 @@ model User {
   admin   Admin?
   student Student?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  aiModel  AIModel   @default(openai)
   sessions Session[]
 }
 
@@ -36,6 +37,7 @@ model Admin {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  courses   Course[]
 }
 
 model Student {
@@ -44,8 +46,10 @@ model Student {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   //TODO: add course enrollment, tracking, or a subscription model
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  conversations Conversation[]
+  tests         Test[]
 }
 
 //TODO: move to Redis 
@@ -55,4 +59,139 @@ model Session {
   user      User     @relation(fields: [userId], references: [id])
   expiresAt DateTime
   createdAt DateTime @default(now())
+}
+
+model Course {
+  id String @id @default(cuid())
+
+  slug        String    @unique
+  title       String
+  description String
+  image       String?
+  chapters    Chapter[]
+  published   Boolean   @default(false)
+  tests       Test[]
+  //TODO: add course progress, top students, completion cert or trophy
+
+  createdByAdminId String
+  admin            Admin  @relation(fields: [createdByAdminId], references: [userId])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([published])
+}
+
+model Chapter {
+  id String @id @default(cuid())
+
+  title         String
+  content       String
+  courseId      String
+  course        Course         @relation(fields: [courseId], references: [id])
+  questions     Question[]
+  conversations Conversation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([courseId])
+}
+
+model Conversation {
+  id String @id @default(cuid())
+
+  chapterId String
+  chapter   Chapter @relation(fields: [chapterId], references: [id])
+
+  studentId String
+  student   Student @relation(fields: [studentId], references: [userId])
+
+  messages Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  //TODO: Check Unique stricness for: Can a student ever restart a conversation? Can they have multiple conv? how AI versions differ?
+
+  @@unique([chapterId, studentId])
+  @@index([studentId])
+  @@index([chapterId])
+}
+
+model Message {
+  id String @id @default(cuid())
+
+  content   String
+  sender    SenderType
+  timestamp DateTime   @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  conversationId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([conversationId])
+}
+
+enum SenderType {
+  Student
+  AI
+}
+
+model Question {
+  id String @id @default(cuid())
+
+  question       String
+  answer         Answer?
+  chapterId      String
+  chapter        Chapter        @relation(fields: [chapterId], references: [id])
+  test_questions TestQuestion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Answer {
+  id          String   @id @default(cuid())
+  answer      String
+  explanation String?
+  questionId  String   @unique
+  Question    Question @relation(fields: [questionId], references: [id])
+}
+
+model Test {
+  id String @id @default(cuid())
+
+  courseId       String
+  course         Course         @relation(fields: [courseId], references: [id])
+  test_questions TestQuestion[]
+
+  ai_score  Int?
+  student   Student  @relation(fields: [studentId], references: [userId])
+  studentId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId])
+}
+
+model TestQuestion {
+  id             String  @id @default(cuid())
+  student_answer String
+  ai_score       Int?
+  ai_feedback    String?
+
+  testId String
+  test   Test   @relation(fields: [testId], references: [id])
+
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id])
+}
+
+enum AIModel {
+  openai
+  gemini
+  claude
 }
