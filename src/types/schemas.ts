@@ -84,7 +84,8 @@ export const getMessagesSchema = z
   .object({
     chapterId: z.cuid(),
   })
-  .extend(paginationSchema);
+  .extend(paginationSchema.shape);
+
 
 // Test Schemas
 export const createTestSchema = z.object({
