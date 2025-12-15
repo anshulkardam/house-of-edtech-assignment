@@ -13,23 +13,32 @@ datasource db {
   provider = "postgresql"
 }
 
+enum UserRole {
+  STUDENT
+  ADMIN
+  SUPER_ADMIN
+}
+
 model User {
-  id       String  @id @default(cuid())
+  id       String   @id @default(cuid())
   name     String
-  email    String  @unique
+  email    String   @unique
   password String
   image    String?
+  role     UserRole @default(STUDENT)
+  admin    Admin?
+  student  Student?
 
-  admin   Admin?
-  student Student?
-
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  aiModel       AIModel        @default(gpt_4o)
   creditBalance CreditBalance?
   transactions  Transaction[]
+  sessions      Session[]
+  adminRequests AdminRequest[]
 
-  aiModel  AIModel   @default(openai)
-  sessions Session[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
 }
 
 model Admin {
@@ -42,55 +51,100 @@ model Admin {
   courses   Course[]
 }
 
+model AdminRequest {
+  id     String             @id @default(cuid())
+  userId String
+  user   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status AdminRequestStatus @default(PENDING)
+  reason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId])
+  @@index([status])
+}
+
+enum AdminRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Student {
   userId String @id
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  //TODO: add course enrollment, tracking, or a subscription model
+  //TODO: add subscription model
 
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  conversations Conversation[]
-  tests         Test[]
+  conversations  Conversation[]
+  tests          Test[]
+  courseProgress CourseProgress[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CourseProgress {
+  id        String  @id @default(cuid())
+  studentId String
+  student   Student @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+  courseId  String
+  course    Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  enrolledAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([studentId, courseId])
+  @@index([studentId])
+  @@index([courseId])
 }
 
 //TODO: move to Redis 
 model Session {
-  id        String   @id @default(uuid())
+  id        String   @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Course {
   id String @id @default(cuid())
 
-  slug        String    @unique
+  slug        String  @unique
   title       String
-  description String
+  description String  @db.Text
   image       String?
-  chapters    Chapter[]
-  published   Boolean   @default(false)
-  tests       Test[]
-  //TODO: add course progress, top students, completion cert or trophy
+  published   Boolean @default(false)
+
+  chapters Chapter[]
+  tests    Test[]
+  progress CourseProgress[]
+  //TODO: add completion cert or trophy
 
   createdByAdminId String
-  admin            Admin  @relation(fields: [createdByAdminId], references: [userId])
+  admin            Admin  @relation(fields: [createdByAdminId], references: [userId], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([published])
+  @@index([createdByAdminId])
+  @@index([slug])
 }
 
 model Chapter {
   id String @id @default(cuid())
 
   title         String
-  content       String
+  content       String         @db.Text
+  order         Int            @default(0)
   courseId      String
-  course        Course         @relation(fields: [courseId], references: [id])
+  course        Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
   questions     Question[]
   conversations Conversation[]
 
@@ -98,16 +152,17 @@ model Chapter {
   updatedAt DateTime @updatedAt
 
   @@index([courseId])
+  @@index([courseId, order])
 }
 
 model Conversation {
   id String @id @default(cuid())
 
   chapterId String
-  chapter   Chapter @relation(fields: [chapterId], references: [id])
+  chapter   Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
 
   studentId String
-  student   Student @relation(fields: [studentId], references: [userId])
+  student   Student @relation(fields: [studentId], references: [userId], onDelete: Cascade)
 
   messages Message[]
 
@@ -124,17 +179,17 @@ model Conversation {
 model Message {
   id String @id @default(cuid())
 
-  content   String
-  sender    SenderType
-  timestamp DateTime   @default(now())
+  content String
+  sender  SenderType
+  model   AIModel?
 
-  conversation   Conversation @relation(fields: [conversationId], references: [id])
   conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
   @@index([conversationId])
+  @@index([createdAt])
 }
 
 enum SenderType {
@@ -145,90 +200,101 @@ enum SenderType {
 model Question {
   id String @id @default(cuid())
 
-  question       String
-  answer         Answer?
-  chapterId      String
-  chapter        Chapter        @relation(fields: [chapterId], references: [id])
-  test_questions TestQuestion[]
+  question      String
+  answer        Answer?
+  chapterId     String
+  chapter       Chapter        @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  testQuestions TestQuestion[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([chapterId])
 }
 
 model Answer {
-  id          String   @id @default(cuid())
-  answer      String
-  explanation String?
-  questionId  String   @unique
-  Question    Question @relation(fields: [questionId], references: [id])
+  id          String  @id @default(cuid())
+  answer      String  @db.Text
+  explanation String? @db.Text
+
+  questionId String   @unique
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 }
 
 model Test {
-  id String @id @default(cuid())
+  id       String  @id @default(cuid())
+  aiScore  Int?
+  feedback String? @db.Text
 
-  courseId       String
-  course         Course         @relation(fields: [courseId], references: [id])
-  test_questions TestQuestion[]
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
-  ai_score  Int?
-  student   Student  @relation(fields: [studentId], references: [userId])
   studentId String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  student   Student @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+
+  testQuestions TestQuestion[]
+
+  submittedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([studentId])
+  @@index([courseId])
+  @@index([courseId, aiScore])
 }
 
 model TestQuestion {
-  id             String  @id @default(cuid())
-  student_answer String
-  ai_score       Int?
-  ai_feedback    String?
+  id            String  @id @default(cuid())
+  studentAnswer String? @db.Text
+  aiScore       Int?
+  aiFeedback    String?
 
   testId String
-  test   Test   @relation(fields: [testId], references: [id])
+  test   Test   @relation(fields: [testId], references: [id], onDelete: Cascade)
 
   questionId String
-  question   Question @relation(fields: [questionId], references: [id])
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([testId])
 }
 
 model CreditBalance {
-  id String @id @default(cuid())
-
+  id      String @id @default(cuid())
   userId  String @unique
   balance Float  @default(0)
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-}
-
-//TODO: normalize or optimize this table later
-model Transaction {
-  id String @id @default(cuid())
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
-
-  notes            String?
-  amount           Float
-  promptTokens     Int      @default(0)
-  completionTokens Int      @default(0)
-  model            AIModel?
-
-  creditBalanceId String
-  creditBalance   CreditBalance @relation(fields: [creditBalanceId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+model Transaction {
+  id     String  @id @default(cuid())
+  amount Float
+  notes  String? @db.Text
+
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  model            AIModel?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  creditBalanceId String
+  creditBalance   CreditBalance @relation(fields: [creditBalanceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
   @@index([creditBalanceId])
+  @@index([createdAt])
 }
 
 enum AIModel {
-  openai
-  gemini
-  claude
+  gpt_4o
+  gpt_4o_mini
 }
