@@ -3,27 +3,41 @@ import { authMiddleware } from "@/server/middleware/auth.middleware";
 import { updateAiModelSchema } from "@/types/schemas";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
+import { successResponse } from "@/server/utils/response";
+import { AIModel } from "@/generated/prisma/client";
 
 const ai = new Hono()
-  .get("/", authMiddleware, async (c) => {
+  // Get current AI model
+  .get("/model", authMiddleware, async (c) => {
     const user = c.get("user");
 
-    const currentModel = user.aiModel;
-
-    return c.json({ currentModel }, 200);
+    return successResponse(c, {
+      model: user.aiModel,
+      availableModels: Object.values(AIModel),
+    });
   })
-  .post(
-    "/",
+
+  // Update AI model
+  .patch(
+    "/model",
     authMiddleware,
     zValidator("json", updateAiModelSchema),
     async (c) => {
       const user = c.get("user");
-
       const { model } = c.req.valid("json");
 
-      const newModel = await prisma.user.update({
+      const updatedUser = await prisma.user.update({
         where: { id: user.id },
         data: { aiModel: model },
+        select: {
+          id: true,
+          aiModel: true,
+        },
+      });
+
+      return successResponse(c, {
+        message: "AI model updated successfully",
+        model: updatedUser.aiModel,
       });
     }
   );
