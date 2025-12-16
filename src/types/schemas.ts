@@ -1,4 +1,3 @@
-import { AIModel, UserRole } from "@/generated/prisma/client";
 import z from "zod";
 
 export const loginSchema = z.object({
@@ -34,9 +33,7 @@ export const createChapterSchema = z.object({
   title: z.string().min(1, "Title is required"),
   content: z.string().min(1, "Content is required"),
   order: z.number().int().min(0).default(0),
-  questions: z
-    .array(questionSchema)
-    .min(1, "At least one question is required"),
+  questions: z.array(questionSchema).min(1, "At least one question is required"),
 });
 
 export const updateChapterSchema = z.object({
@@ -50,9 +47,7 @@ export const createCourseSchema = z.object({
   description: z.string().min(1, "Description is required"),
   published: z.boolean().default(false),
   image: z.url().optional(),
-  chapters: z
-    .array(createChapterSchema)
-    .min(1, "At least one chapter is required"),
+  chapters: z.array(createChapterSchema).min(1, "At least one chapter is required"),
 });
 
 export const updateCourseSchema = z.object({
@@ -86,7 +81,6 @@ export const getMessagesSchema = z
   })
   .extend(paginationSchema.shape);
 
-
 // Test Schemas
 export const createTestSchema = z.object({
   courseId: z.cuid(),
@@ -112,11 +106,7 @@ export const getTestLeaderboardSchema = z
   .object({
     courseId: z.cuid(),
   })
-  .extend(paginationSchema);
-
-export const updateAiModelSchema = z.object({
-  model: z.enum(AIModel),
-});
+  .extend(paginationSchema.shape);
 
 export const createPaymentSchema = z.object({
   creditsCount: z.coerce.number().int().min(1).max(1000),
@@ -132,11 +122,6 @@ export const approveAdminRequestSchema = z.object({
   approved: z.boolean(),
 });
 
-export const listUsersSchema = paginationSchema.extend({
-  role: z.enum(UserRole).optional(),
-  search: z.string().optional(),
-});
-
 export const updateProfileSchema = z.object({
   name: z.string().min(2).optional(),
   image: z.url().optional().nullable(),
@@ -148,7 +133,6 @@ export const enrollCourseSchema = z.object({
   courseId: z.cuid(),
 });
 
-
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type PaginationInput = z.infer<typeof paginationSchema>;
@@ -158,10 +142,6 @@ export type CreateChapterInput = z.infer<typeof createChapterSchema>;
 export type UpdateChapterInput = z.infer<typeof updateChapterSchema>;
 export type AskAiQuestionInput = z.infer<typeof askAiQuestionSchema>;
 export type SubmitTestInput = z.infer<typeof submitTestSchema>;
-export type UpdateAiModelInput = z.infer<typeof updateAiModelSchema>;
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
 export type RequestAdminInput = z.infer<typeof requestAdminSchema>;
-export type ApproveAdminRequestInput = z.infer<
-  typeof approveAdminRequestSchema
->;
-export type ListUsersInput = z.infer<typeof listUsersSchema>;
+export type ApproveAdminRequestInput = z.infer<typeof approveAdminRequestSchema>;

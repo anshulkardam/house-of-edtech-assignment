@@ -1,14 +1,6 @@
 import prisma from "@/lib/prisma";
-import {
-  authMiddleware,
-  requireSuperAdmin,
-} from "@/server/middleware/auth.middleware";
-import {
-  approveAdminRequestSchema,
-  listUsersSchema,
-  paginationSchema,
-  requestAdminSchema,
-} from "@/types/schemas";
+import { authMiddleware, requireSuperAdmin } from "@/server/middleware/auth.middleware";
+import { approveAdminRequestSchema, paginationSchema, requestAdminSchema } from "@/types/schemas";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import {
@@ -18,64 +10,60 @@ import {
   ErrorCodes,
 } from "@/server/utils/response";
 import { UserRole, AdminRequestStatus } from "@/generated/prisma/client";
+import z from "zod";
+
+export const listUsersSchema = paginationSchema.extend({
+  role: z.enum(UserRole).optional(),
+  search: z.string().optional(),
+});
 
 const admin = new Hono()
   // Request admin access
-  .post(
-    "/request",
-    authMiddleware,
-    zValidator("json", requestAdminSchema),
-    async (c) => {
-      const user = c.get("user");
-      const { reason } = c.req.valid("json");
+  .post("/request", authMiddleware, zValidator("json", requestAdminSchema), async (c) => {
+    const user = c.get("user");
+    const { reason } = c.req.valid("json");
 
-      if (user.admin) {
+    if (user.admin) {
+      return errorResponse(c, ErrorCodes.ALREADY_EXISTS, "You are already an admin", 400);
+    }
+
+    const existingRequest = await prisma.adminRequest.findUnique({
+      where: { userId: user.id },
+    });
+
+    if (existingRequest) {
+      if (existingRequest.status === AdminRequestStatus.PENDING) {
         return errorResponse(
           c,
           ErrorCodes.ALREADY_EXISTS,
-          "You are already an admin",
+          "You already have a pending admin request",
+          400
+        );
+      } else if (existingRequest.status === AdminRequestStatus.APPROVED) {
+        return errorResponse(
+          c,
+          ErrorCodes.ALREADY_EXISTS,
+          "Your admin request was already approved",
           400
         );
       }
-
-      const existingRequest = await prisma.adminRequest.findUnique({
-        where: { userId: user.id },
-      });
-
-      if (existingRequest) {
-        if (existingRequest.status === AdminRequestStatus.PENDING) {
-          return errorResponse(
-            c,
-            ErrorCodes.ALREADY_EXISTS,
-            "You already have a pending admin request",
-            400
-          );
-        } else if (existingRequest.status === AdminRequestStatus.APPROVED) {
-          return errorResponse(
-            c,
-            ErrorCodes.ALREADY_EXISTS,
-            "Your admin request was already approved",
-            400
-          );
-        }
-      }
-
-      const request = await prisma.adminRequest.upsert({
-        where: { userId: user.id },
-        create: {
-          userId: user.id,
-          reason,
-          status: AdminRequestStatus.PENDING,
-        },
-        update: {
-          reason,
-          status: AdminRequestStatus.PENDING,
-        },
-      });
-
-      return successResponse(c, request, 201);
     }
-  )
+
+    const request = await prisma.adminRequest.upsert({
+      where: { userId: user.id },
+      create: {
+        userId: user.id,
+        reason,
+        status: AdminRequestStatus.PENDING,
+      },
+      update: {
+        reason,
+        status: AdminRequestStatus.PENDING,
+      },
+    });
+
+    return successResponse(c, request, 201);
+  })
 
   // Get my admin request status
   .get("/request/status", authMiddleware, async (c) => {
@@ -156,12 +144,7 @@ const admin = new Hono()
       });
 
       if (!request) {
-        return errorResponse(
-          c,
-          ErrorCodes.NOT_FOUND,
-          "Admin request not found",
-          404
-        );
+        return errorResponse(c, ErrorCodes.NOT_FOUND, "Admin request not found", 404);
       }
 
       if (request.status !== AdminRequestStatus.PENDING) {
@@ -178,9 +161,7 @@ const admin = new Hono()
         await tx.adminRequest.update({
           where: { userId },
           data: {
-            status: approved
-              ? AdminRequestStatus.APPROVED
-              : AdminRequestStatus.REJECTED,
+            status: approved ? AdminRequestStatus.APPROVED : AdminRequestStatus.REJECTED,
           },
         });
 
@@ -201,9 +182,7 @@ const admin = new Hono()
       });
 
       return successResponse(c, {
-        message: approved
-          ? "Admin request approved"
-          : "Admin request rejected",
+        message: approved ? "Admin request approved" : "Admin request rejected",
         userId,
         approved,
       });
@@ -276,94 +255,89 @@ const admin = new Hono()
   )
 
   // Get user details (Super Admin only)
-  .get(
-    "/users/:userId",
-    authMiddleware,
-    requireSuperAdmin,
-    async (c) => {
-      const userId = c.req.param("userId");
+  .get("/users/:userId", authMiddleware, requireSuperAdmin, async (c) => {
+    const userId = c.req.param("userId");
 
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: {
-          admin: {
-            include: {
-              courses: {
-                select: {
-                  id: true,
-                  title: true,
-                  slug: true,
-                  published: true,
-                  createdAt: true,
-                  _count: {
-                    select: {
-                      chapters: true,
-                      tests: true,
-                    },
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        admin: {
+          include: {
+            courses: {
+              select: {
+                id: true,
+                title: true,
+                slug: true,
+                published: true,
+                createdAt: true,
+                _count: {
+                  select: {
+                    chapters: true,
+                    tests: true,
                   },
                 },
               },
             },
-          },
-          student: {
-            include: {
-              tests: {
-                select: {
-                  id: true,
-                  aiScore: true,
-                  submittedAt: true,
-                  course: {
-                    select: {
-                      id: true,
-                      title: true,
-                      slug: true,
-                    },
-                  },
-                },
-                orderBy: { createdAt: "desc" },
-                take: 10,
-              },
-              courseProgress: {
-                select: {
-                  enrolledAt: true,
-                  course: {
-                    select: {
-                      id: true,
-                      title: true,
-                      slug: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-          creditBalance: {
-            select: {
-              balance: true,
-            },
-          },
-          transactions: {
-            select: {
-              id: true,
-              amount: true,
-              notes: true,
-              createdAt: true,
-            },
-            orderBy: { createdAt: "desc" },
-            take: 10,
           },
         },
-      });
+        student: {
+          include: {
+            tests: {
+              select: {
+                id: true,
+                aiScore: true,
+                submittedAt: true,
+                course: {
+                  select: {
+                    id: true,
+                    title: true,
+                    slug: true,
+                  },
+                },
+              },
+              orderBy: { createdAt: "desc" },
+              take: 10,
+            },
+            courseProgress: {
+              select: {
+                enrolledAt: true,
+                course: {
+                  select: {
+                    id: true,
+                    title: true,
+                    slug: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        creditBalance: {
+          select: {
+            balance: true,
+          },
+        },
+        transactions: {
+          select: {
+            id: true,
+            amount: true,
+            notes: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+        },
+      },
+    });
 
-      if (!user) {
-        return errorResponse(c, ErrorCodes.NOT_FOUND, "User not found", 404);
-      }
-
-      const { password: _, ...userWithoutPassword } = user;
-
-      return successResponse(c, userWithoutPassword);
+    if (!user) {
+      return errorResponse(c, ErrorCodes.NOT_FOUND, "User not found", 404);
     }
-  )
+
+    const { password: _, ...userWithoutPassword } = user;
+
+    return successResponse(c, userWithoutPassword);
+  })
 
   // Get statistics (Super Admin only)
   .get("/stats", authMiddleware, requireSuperAdmin, async (c) => {
